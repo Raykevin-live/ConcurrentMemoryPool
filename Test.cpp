@@ -77,17 +77,33 @@ void test_TSL() {
 	t2.join();
 }
 
-void test_ConcurrentAlloc() {
+void test_ConcurrentAlloc1() {
 	void* p1 = ConcurrentAlloc(6);
 	void* p2 = ConcurrentAlloc(8);
 	void* p3 = ConcurrentAlloc(1);
 	void* p4 = ConcurrentAlloc(7);
 	void* p5 = ConcurrentAlloc(8);
+
+	ConcurrentFree(p1, 6);
+	ConcurrentFree(p2, 8);
+	ConcurrentFree(p3, 1);
+	ConcurrentFree(p4, 7);
+	ConcurrentFree(p5, 8);
+}
+
+void test_ConcurrentAlloc2() {
+	for (int i = 0; i < 5; i++) {
+		void* p1 = ConcurrentAlloc(6);
+		cout << p1 << endl;
+	}
+
+	void* p2 = ConcurrentAlloc(8);
+	cout << p2 << endl;
 }
 int main()
 {
 	//TestObjectPool();
 	//test_TSL();
-	test_ConcurrentAlloc();
+	test_ConcurrentAlloc1();
 	return 0;
 }

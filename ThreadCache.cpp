@@ -24,6 +24,19 @@ void ThreadCache::Deallocate(void* ptr, size_t size) {
 	//找出对应映射的自由链表桶，对象插进去
 	size_t index = SizeClass::Index(size);
 	_freeLists[index].Push(ptr);
+
+	// 当链表长度大于一次批量的内存时就开始释放，还一段list给central cache
+	if (_freeLists[index].Size() >= _freeLists[index].MaxSize()) {
+		ListTooLong(_freeLists[index], size);
+	}
+}
+
+void ThreadCache::ListTooLong(FreeList& list, size_t size) {
+	void* start = nullptr, * end = nullptr;
+
+	list.PopRange(start, end, list.MaxSize());
+
+	CentralCache::GetInstance()->ReleaseListToSpans(start, size);
 }
 
 void* ThreadCache::FetchFromCentralCache(size_t index, size_t size) {
@@ -47,7 +60,7 @@ void* ThreadCache::FetchFromCentralCache(size_t index, size_t size) {
 		assert(start == end);
 	}
 	else {
-		_freeLists[index].PushRange(NextObj(start), end);
+		_freeLists[index].PushRange(NextObj(start), end, actualNum - 1);
 	}
 	return start;
 }

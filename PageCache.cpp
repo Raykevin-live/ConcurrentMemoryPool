@@ -26,6 +26,15 @@ Span* PageCache::NewSpan(size_t k) {
 			nSpan->_n -= k;
 			//剩余的挂上去
 			_SpanLists[nSpan->_n].PushFront(nSpan);
+			//存储nSpan的首位页号和nSpan的映射, 方便page cache回收内存时进行合并查找
+			_idSpanMap[nSpan->_pageId] = nSpan;
+			_idSpanMap[nSpan->_pageId + nSpan->_n - 1] = nSpan;
+
+
+			// 建立id和span的映射，方便central cache回收小块内存时查找对应的span
+			for (PAGE_ID i = 0; i < kSpan->_n; ++i) {
+				_idSpanMap[kSpan->_pageId + i] = kSpan;
+			}
 			return kSpan;
 		}
 	}
@@ -39,4 +48,77 @@ Span* PageCache::NewSpan(size_t k) {
 	//开完空间再去申请
 	//但是要注意递归时被锁住的问题
 	return NewSpan(k);
+}
+
+Span* PageCache::MapObjectToSpan(void* obj) {
+	PAGE_ID id = ((PAGE_ID)obj >> PAGE_SHIFT);
+	auto ret = _idSpanMap.find(id);
+	if (ret != _idSpanMap.end()) {
+		return ret->second;
+	}
+	else {
+		assert(false);
+		return nullptr;
+	}
+}
+
+void PageCache::ReleaseSpanToPageCache(Span* span) {
+	// 解决外碎片问题
+	// 先要对span先后的页尝试进行合并，缓解外碎片问题
+	// 
+	// 向前合并	
+	while (1) {
+		PAGE_ID prevId = span->_pageId - 1;
+		// 前面的页号没有了，不合并了
+		auto ret = _idSpanMap.find(prevId);
+		if (ret == _idSpanMap.end()) {
+			break;
+		}
+		//前面相邻页在使用，不合并
+		Span* prevSpan = ret->second;
+		if (prevSpan->isUse == true) {
+			break;
+		}
+		//合并超过128页的span没法管理，不合并
+		if (prevSpan->_n + span->_n > NPAGES - 1) {
+			break;
+		}
+
+		span->_pageId = prevSpan->_pageId;
+		span->_n += prevSpan->_n;
+
+		_SpanLists[prevSpan->_n].Erase(prevSpan);
+		delete prevSpan;
+	}
+
+	//向后合并
+	while (1) {
+		PAGE_ID nextId = span->_pageId - span->_n;
+		// 前面的页号没有了，不合并了
+		auto ret = _idSpanMap.find(nextId);
+		if (ret == _idSpanMap.end()) {
+			break;
+		}
+		//后面相邻页在使用，不合并
+		Span* nextSpan = ret->second;
+		if (nextSpan->isUse == true) {
+			break;
+		}
+		//合并超过128页的span没法管理，不合并
+		if (nextSpan->_n + span->_n > NPAGES - 1) {
+			break;
+		}
+
+		span->_n += nextSpan->_n;
+
+		_SpanLists[nextSpan->_n].Erase(nextSpan);
+		delete nextSpan;
+	}
+
+	//还回PageCache
+	_SpanLists[span->_n].PushFront(span);
+	span->isUse = false;
+	//存首位方便合并
+	_idSpanMap[span->_pageId] = span;
+	_idSpanMap[span->_pageId+span->_n-1] = span;
 }

@@ -52,6 +52,7 @@ Span* CentralCache::GetOneSpan(SpanList& list, size_t size) {
 	// 直接在外面加锁
 	PageCache::GetInstance()->_pageMtx.lock();
 	Span* span = PageCache::GetInstance()->NewSpan(SizeClass::NumMovePage(size));
+	span->isUse = true;
 	PageCache::GetInstance()->_pageMtx.unlock();
 
 	// 对获取的span进行切分，不需要加锁，因为这时其他线程访问不到这个span
@@ -77,4 +78,35 @@ Span* CentralCache::GetOneSpan(SpanList& list, size_t size) {
 	list.PushFront(span);
 
 	return span;
+}
+
+void CentralCache::ReleaseListToSpans(void* start, size_t size) {
+	size_t index = SizeClass::Index(size);
+
+	_spanLists[index]._mtx.lock();
+	while (start) {
+		void* next = NextObj(start);
+		Span* span = PageCache::GetInstance()->MapObjectToSpan(start);
+		NextObj(start) = span->_freeList;
+		span->_freeList = start;
+		--span->_useCount;
+
+		if (span->_useCount == 0) {
+			//说明切分出去的所有小块都回来了
+			_spanLists[index].Erase(span);
+			span->_freeList = nullptr;
+			span->_next = nullptr;
+			span->_prev = nullptr;
+
+			//解桶锁，其他thread cache可以进行操作
+			_spanLists[index]._mtx.unlock();
+
+			PageCache::GetInstance()->_pageMtx.lock();
+			PageCache::GetInstance()->ReleaseSpanToPageCache(span);
+			PageCache::GetInstance()->_pageMtx.unlock();
+
+		}
+		start = next;
+	}
+	_spanLists[index]._mtx.unlock();
 }
