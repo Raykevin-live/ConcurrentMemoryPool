@@ -4,6 +4,8 @@
 #include <thread>
 #include <mutex>
 #include <unordered_map>
+#include "ObjectPool.h"
+
 //#include <algorithm>
 
 using std::endl;
@@ -143,9 +145,8 @@ public:
 			return _RoundUp(size, 8*1024);
 		}
 		else {
-			assert(false);
+			return _RoundUp(size, 1 << PAGE_SHIFT);//以页为单位
 		}
-		return -1;
 	}
 
 	//映射位置
@@ -228,6 +229,7 @@ struct Span {
 	Span* _next = nullptr;//双向链表
 	Span* _prev = nullptr;
 
+	size_t _objSize = 0;// 切好的小对象的大小
 	size_t _useCount = 0;//切好的小块内存， 被分配给thread cache的计数
 	void* _freeList = nullptr; // 切好的小块内存的自由列表
 

@@ -1,6 +1,5 @@
-//#define _CRT_SECURE_NO_WARNINGS 1
+#define _CRT_SECURE_NO_WARNINGS 1
 
-#include "ObjectPool.h"
 #include <vector>
 #include <ctime>
 #include "ConCurrentAlloc.h"
@@ -39,7 +38,7 @@ void TestObjectPool()
 		v1.clear();
 	}
 	size_t end1 = clock();
-	lingze::ObjectPool<TreeNode> TNPool;
+	ObjectPool<TreeNode> TNPool;
 	size_t begin2 = clock();
 	std::vector<TreeNode*> v2;
 	v2.reserve(N);
@@ -84,11 +83,11 @@ void test_ConcurrentAlloc1() {
 	void* p4 = ConcurrentAlloc(7);
 	void* p5 = ConcurrentAlloc(8);
 
-	ConcurrentFree(p1, 6);
-	ConcurrentFree(p2, 8);
-	ConcurrentFree(p3, 1);
-	ConcurrentFree(p4, 7);
-	ConcurrentFree(p5, 8);
+	ConcurrentFree(p1);
+	ConcurrentFree(p2);
+	ConcurrentFree(p3);
+	ConcurrentFree(p4);
+	ConcurrentFree(p5);
 }
 
 void test_ConcurrentAlloc2() {
@@ -100,10 +99,51 @@ void test_ConcurrentAlloc2() {
 	void* p2 = ConcurrentAlloc(8);
 	cout << p2 << endl;
 }
-int main()
-{
-	//TestObjectPool();
-	//test_TSL();
-	test_ConcurrentAlloc1();
-	return 0;
+
+void ThreadAlloc1() {
+	std::vector<void*> v;
+	for (int i = 0; i < 7; i++) {
+		void* ptr = ConcurrentAlloc(6);
+		v.push_back(ptr);
+	}
+
+	for (auto& e : v) {
+		ConcurrentFree(e);
+	}
 }
+void ThreadAlloc2() {
+	std::vector<void*> v;
+	for (int i = 0; i < 7; i++) {
+		void* ptr = ConcurrentAlloc(16);
+		v.push_back(ptr);
+	}
+
+	for (auto& e : v) {
+		ConcurrentFree(e);
+	}
+}
+
+void test_MutilThreadAlloc() {
+	std::thread t1(ThreadAlloc1);
+	std::thread t2(ThreadAlloc2);
+	t1.join();
+	t2.join();
+}
+
+void BigAlloc() {
+	// ´óÄÚ´æÉêÇë
+	void* p1 = ConcurrentAlloc(257 * 1024);
+	ConcurrentFree(p1);
+
+	void* p2 = ConcurrentAlloc(129 * 8 * 1024);
+	ConcurrentFree(p2);
+}
+//int main()
+//{
+//	//TestObjectPool();
+//	//test_TSL();
+//	test_ConcurrentAlloc1();
+//	//test_MutilThreadAlloc();
+//	//BigAlloc();
+//	return 0;
+//}

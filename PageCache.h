@@ -18,6 +18,7 @@ public:
 	std::mutex _pageMtx;
 private:
 	SpanList _SpanLists[NPAGES];
+	ObjectPool<Span> _spanPool; //用来优化new
 	std::unordered_map<PAGE_ID, Span*> _idSpanMap;
 
 	//单例模式
