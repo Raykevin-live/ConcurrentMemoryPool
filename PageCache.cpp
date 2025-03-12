@@ -16,13 +16,22 @@ Span* PageCache::NewSpan(size_t k) {
 		span->_pageId = (PAGE_ID)ptr >> PAGE_SHIFT;
 		span->_n = k;
 		//缓存页号
-		_idSpanMap[span->_pageId] = span;
+		//_idSpanMap[span->_pageId] = span;
+		_idSpanMap.set(span->_pageId, span);
 
 		return span;
 	}
 	//先检查第k个桶里面有没有span
+	//这里忘记存地址了
 	if (!_SpanLists[k].Empty()) {
-		return _SpanLists[k].PopFront();
+		Span* kSpan =  _SpanLists[k].PopFront();
+
+		// 建立id和span的映射，方便central cache回收小块内存时查找对应的span
+		for (PAGE_ID i = 0; i < kSpan->_n; ++i) {
+			//_idSpanMap[kSpan->_pageId + i] = kSpan;
+			_idSpanMap.set(kSpan->_pageId + i, kSpan);
+		}
+		return kSpan;
 	}
 	//检查后面的桶里有没有span，如果有可以进行切分
 	for (size_t i = k + 1; i < NPAGES; i++) {
@@ -41,13 +50,17 @@ Span* PageCache::NewSpan(size_t k) {
 			//剩余的挂上去
 			_SpanLists[nSpan->_n].PushFront(nSpan);
 			//存储nSpan的首位页号和nSpan的映射, 方便page cache回收内存时进行合并查找
-			_idSpanMap[nSpan->_pageId] = nSpan;
-			_idSpanMap[nSpan->_pageId + nSpan->_n - 1] = nSpan;
+			/*_idSpanMap[nSpan->_pageId] = nSpan;
+			_idSpanMap[nSpan->_pageId + nSpan->_n - 1] = nSpan;*/
+			_idSpanMap.set(nSpan->_pageId, nSpan);
+			_idSpanMap.set(nSpan->_pageId + nSpan->_n - 1, nSpan);
 
 
 			// 建立id和span的映射，方便central cache回收小块内存时查找对应的span
 			for (PAGE_ID i = 0; i < kSpan->_n; ++i) {
-				_idSpanMap[kSpan->_pageId + i] = kSpan;
+				//_idSpanMap[kSpan->_pageId + i] = kSpan;
+				_idSpanMap.set(kSpan->_pageId + i, kSpan);
+
 			}
 			return kSpan;
 		}
@@ -67,15 +80,19 @@ Span* PageCache::NewSpan(size_t k) {
 Span* PageCache::MapObjectToSpan(void* obj) {
 	PAGE_ID id = ((PAGE_ID)obj >> PAGE_SHIFT);
 	//访问哈希表也要加锁，防止数据被删除了还在读
-	std::unique_lock<std::mutex> lock(_pageMtx); //出作用域自动解锁 RAII机制
-	auto ret = _idSpanMap.find(id);
-	if (ret != _idSpanMap.end()) {
-		return ret->second;
-	}
-	else {
-		assert(false);
-		return nullptr;
-	}
+	//std::unique_lock<std::mutex> lock(_pageMtx); //出作用域自动解锁 RAII机制
+	//auto ret = _idSpanMap.find(id);
+	//if (ret != _idSpanMap.end()) {
+	//	return ret->second;
+	//}
+	//else {
+	//	assert(false);
+	//	return nullptr;
+	//}
+
+	auto ret = (Span*)_idSpanMap.get(id);
+	assert(ret != nullptr);
+	return ret;
 }
 
 void PageCache::ReleaseSpanToPageCache(Span* span) {
@@ -95,13 +112,18 @@ void PageCache::ReleaseSpanToPageCache(Span* span) {
 	while (1) {
 		PAGE_ID prevId = span->_pageId - 1;
 		// 前面的页号没有了，不合并了
-		auto ret = _idSpanMap.find(prevId);
+		/*auto ret = _idSpanMap.find(prevId);
 		if (ret == _idSpanMap.end()) {
+			break;
+		}*/
+		auto ret = (Span*)_idSpanMap.get(prevId);
+		if (ret == nullptr) {
 			break;
 		}
 		//前面相邻页在使用，不合并
-		Span* prevSpan = ret->second;
-		if (prevSpan->isUse == true) {
+		//Span* prevSpan = ret->second;
+		Span* prevSpan = ret;
+		if (prevSpan->_isUse == true) {
 			break;
 		}
 		//合并超过128页的span没法管理，不合并
@@ -119,15 +141,22 @@ void PageCache::ReleaseSpanToPageCache(Span* span) {
 
 	//向后合并
 	while (1) {
-		PAGE_ID nextId = span->_pageId - span->_n;
+		PAGE_ID nextId = span->_pageId + span->_n;
 		// 前面的页号没有了，不合并了
-		auto ret = _idSpanMap.find(nextId);
+		/*auto ret = _idSpanMap.find(nextId);
 		if (ret == _idSpanMap.end()) {
 			break;
+		}*/
+
+		auto ret = (Span*)_idSpanMap.get(nextId);
+		if (ret == nullptr) {
+			break;
 		}
+
 		//后面相邻页在使用，不合并
-		Span* nextSpan = ret->second;
-		if (nextSpan->isUse == true) {
+		//Span* nextSpan = ret->second;
+		Span* nextSpan = ret;
+		if (nextSpan->_isUse == true) {
 			break;
 		}
 		//合并超过128页的span没法管理，不合并
@@ -144,8 +173,10 @@ void PageCache::ReleaseSpanToPageCache(Span* span) {
 
 	//还回PageCache
 	_SpanLists[span->_n].PushFront(span);
-	span->isUse = false;
+	span->_isUse = false;
 	//存首位方便合并
-	_idSpanMap[span->_pageId] = span;
-	_idSpanMap[span->_pageId+span->_n-1] = span;
+	/*_idSpanMap[span->_pageId] = span;
+	_idSpanMap[span->_pageId+span->_n-1] = span;*/
+	_idSpanMap.set(span->_pageId, span);
+	_idSpanMap.set(span->_pageId + span->_n - 1, span);
 }

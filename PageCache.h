@@ -1,6 +1,6 @@
 #pragma once
 #include "Common.h"
-
+#include "PageMap.h"
 class PageCache {
 public:
 	static PageCache* GetInstance() {
@@ -19,7 +19,8 @@ public:
 private:
 	SpanList _SpanLists[NPAGES];
 	ObjectPool<Span> _spanPool; //用来优化new
-	std::unordered_map<PAGE_ID, Span*> _idSpanMap;
+	//std::unordered_map<PAGE_ID, Span*> _idSpanMap;
+	TCMalloc_PageMap1<32-PAGE_SHIFT> _idSpanMap;
 
 	//单例模式
 	PageCache()

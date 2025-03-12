@@ -52,7 +52,7 @@ Span* CentralCache::GetOneSpan(SpanList& list, size_t size) {
 	// 直接在外面加锁
 	PageCache::GetInstance()->_pageMtx.lock();
 	Span* span = PageCache::GetInstance()->NewSpan(SizeClass::NumMovePage(size));
-	span->isUse = true;
+	span->_isUse = true;
 	span->_objSize = size;
 	PageCache::GetInstance()->_pageMtx.unlock();
 
@@ -74,6 +74,7 @@ Span* CentralCache::GetOneSpan(SpanList& list, size_t size) {
 		tail = start;
 		start += size;
 	}
+	NextObj(tail) = nullptr;
 	//切好后，将span挂到桶里的时候需要加锁
 	list._mtx.lock();
 	list.PushFront(span);

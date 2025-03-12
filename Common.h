@@ -159,7 +159,7 @@ public:
 		}
 	}*/
 	static size_t _Index(size_t size, size_t alignShift) {
-		return (size + (1 << alignShift) - 1) >> alignShift - 1;
+		return ((size + (static_cast<unsigned long long>(1) << alignShift) - 1) >> alignShift) - 1;
 	}
 	//映射规则
 	static size_t Index(size_t size) {
@@ -170,16 +170,16 @@ public:
 			return _Index(size, 3);
 		}
 		else if (size <= 1024) {
-			return _RoundUp(size-128, 4) + group_array[0];
+			return _Index(size-128, 4) + group_array[0];
 		}
 		else if (size <= 8 * 1024) {
-			return _RoundUp(size - 1024, 7) + group_array[1] + group_array[0];
+			return _Index(size - 1024, 7) + group_array[1] + group_array[0];
 		}
 		else if (size <= 64 * 1024) {
-			return _RoundUp(size - 8*1024, 10) + group_array[2] + group_array[1] + group_array[0];
+			return _Index(size - 8*1024, 10) + group_array[2] + group_array[1] + group_array[0];
 		}
 		else if (size <= 256 * 1024) {
-			return _RoundUp(size - 64 * 1024, 13) + group_array[3] + group_array[2] + group_array[1] + group_array[0];
+			return _Index(size - 64 * 1024, 13) + group_array[3] + group_array[2] + group_array[1] + group_array[0];
 		}
 		else {
 			assert(false);
@@ -192,7 +192,7 @@ public:
 		// 慢开始反馈调节算法
 		// 小对象给多点，对象给少点(防止多次触发桶锁）
 		assert(size > 0);
-		int num = MAX_BYTES / size;
+		size_t num = MAX_BYTES / size;
 		if (num < 2) {
 			num = 2;
 		}
@@ -233,7 +233,7 @@ struct Span {
 	size_t _useCount = 0;//切好的小块内存， 被分配给thread cache的计数
 	void* _freeList = nullptr; // 切好的小块内存的自由列表
 
-	bool isUse = false; // 是否在被使用
+	bool _isUse = false; // 是否在被使用
 };
 
 //带头双向循环链表

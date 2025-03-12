@@ -26,7 +26,7 @@ static void* ConcurrentAlloc(size_t size) {
 		pTLSThreadCache = tcPool.New();
 	}
 
-	cout << std::this_thread::get_id() << ":" << pTLSThreadCache << endl;
+	//cout << std::this_thread::get_id() << ":" << pTLSThreadCache << endl;
 	return pTLSThreadCache->Allocate(size);
 }
 
