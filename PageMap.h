@@ -26,7 +26,7 @@ public:
 		if ((k >> BITS) > 0) {
 			return NULL;
 		}
-		return array_[k];
+		return array_[k]; 
 	}
 
 	// REQUIRES "k" is in range "[0,2^BITS-1]".
@@ -63,6 +63,7 @@ public:
 	//explicit TCMalloc_PageMap2(void* (*allocator)(size_t)) {
 	explicit TCMalloc_PageMap2() {
 		//allocator_ = allocator;
+
 		memset(root_, 0, sizeof(root_));
 
 		PreallocateMoreMemory();
@@ -141,8 +142,10 @@ private:
 	void* (*allocator_)(size_t);          // Memory allocator
 
 	Node* NewNode() {
-		Node* result = reinterpret_cast<Node*>((*allocator_)(sizeof(Node)));
-		if (result != NULL) {
+		size_t size = sizeof(Node);
+		size_t alignSize = SizeClass::_RoundUp(size, 1 << PAGE_SHIFT);
+		Node* result = reinterpret_cast<Node*>(SystemAlloc(alignSize >> PAGE_SHIFT));
+		if (result != nullptr) {
 			memset(result, 0, sizeof(*result));
 		}
 		return result;
@@ -151,8 +154,7 @@ private:
 public:
 	typedef uintptr_t Number;
 
-	explicit TCMalloc_PageMap3(void* (*allocator)(size_t)) {
-		allocator_ = allocator;
+	explicit TCMalloc_PageMap3() {
 		root_ = NewNode();
 	}
 
@@ -168,7 +170,7 @@ public:
 	}
 
 	void set(Number k, void* v) {
-		ASSERT(k >> BITS == 0);
+		assert(k >> BITS == 0);
 		const Number i1 = k >> (LEAF_BITS + INTERIOR_BITS);
 		const Number i2 = (k >> LEAF_BITS) & (INTERIOR_LENGTH - 1);
 		const Number i3 = k & (LEAF_LENGTH - 1);
@@ -206,5 +208,6 @@ public:
 	}
 
 	void PreallocateMoreMemory() {
+		Ensure(0, 1 << BITS);
 	}
 };

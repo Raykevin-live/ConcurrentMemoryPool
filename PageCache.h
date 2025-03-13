@@ -20,11 +20,18 @@ private:
 	SpanList _SpanLists[NPAGES];
 	ObjectPool<Span> _spanPool; //用来优化new
 	//std::unordered_map<PAGE_ID, Span*> _idSpanMap;
-	TCMalloc_PageMap1<32-PAGE_SHIFT> _idSpanMap;
+
+//跨平台
+#ifdef _WIN64
+	TCMalloc_PageMap3<64 - PAGE_SHIFT> _idSpanMap;
+#elif _WIN32
+	TCMalloc_PageMap1<32 - PAGE_SHIFT> _idSpanMap;
+#endif
 
 	//单例模式
 	PageCache()
 	{};
+
 	PageCache(const PageCache&) = delete;
 	PageCache& operator=(const PageCache&) = delete;
 	static PageCache _sInstan;
